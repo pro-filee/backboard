@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ultimate Drawing Board</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #111;
+    }
+    canvas {
+      background: #000;
+      display: block;
+      touch-action: none;
+    }
+    .toolbar {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.1);
+      padding: 10px;
+      border-radius: 8px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      z-index: 10;
+    }
+    .toolbar label, .toolbar select, .toolbar input, .toolbar button {
+      font-size: 14px;
+      color: white;
+    }
+    .toolbar input[type="range"] {
+      width: 80px;
+    }
+    .toolbar button {
+      padding: 6px 10px;
+      border: none;
+      background: #444;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .toolbar button:hover {
+      background: #666;
+    }
+  </style>
+</head>
+<body>
+<div class="toolbar">
+  <label>Tool:
+    <select id="tool">
+      <option value="pencil">Pencil</option>
+      <option value="chalk">Chalk</option>
+      <option value="marker">Marker</option>
+      <option value="calligraphy">Calligraphy</option>
+      <option value="brush">Brush</option>
+      <option value="eraser">Eraser</option>
+    </select>
+  </label>
+  <label>Color: <input type="color" id="color" value="#00ff00"></label>
+  <label>Opacity: <input type="range" id="opacity" min="0.1" max="1" step="0.1" value="1"></label>
+  <label>Size: <input type="range" id="size" min="1" max="50" value="4"></label>
+  <button onclick="undo()">Undo</button>
+  <button onclick="redo()">Redo</button>
+  <button onclick="clearCanvas()">Clear</button>
+</div>
+<canvas id="canvas"></canvas>
+<script>
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  let drawing = false;
+  let lastX = 0, lastY = 0;
+  let paths = [], redoStack = [];
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function getSettings() {
+    return {
+      tool: document.getElementById('tool').value,
+      color: document.getElementById('color').value,
+      opacity: parseFloat(document.getElementById('opacity').value),
+      size: parseInt(document.getElementById('size').value)
+    };
+  }
+
+  function drawLine(x1, y1, x2, y2, settings) {
+    ctx.save();
+    ctx.globalAlpha = settings.opacity;
+    ctx.strokeStyle = settings.tool === 'eraser' ? '#000' : settings.color;
+    ctx.lineWidth = settings.size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (settings.tool === 'chalk') {
+      ctx.strokeStyle = `rgba(255,255,255,${Math.random() * 0.2})`;
+    } else if (settings.tool === 'marker') {
+      ctx.lineCap = 'butt';
+    } else if (settings.tool === 'calligraphy') {
+      ctx.lineJoin = 'miter';
+      ctx.transform(1, 0.5, -0.5, 1, 0, 0);
+    } else if (settings.tool === 'brush') {
+      ctx.lineWidth = settings.size + Math.random() * 2;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function startDraw(x, y) {
+    drawing = true;
+    lastX = x;
+    lastY = y;
+    redoStack = [];
+  }
+
+  function moveDraw(x, y) {
+    if (!drawing) return;
+    const settings = getSettings();
+    drawLine(lastX, lastY, x, y, settings);
+    paths.push({x1: lastX, y1: lastY, x2: x, y2: y, settings});
+    lastX = x;
+    lastY = y;
+  }
+
+  function endDraw() {
+    drawing = false;
+  }
+
+  canvas.addEventListener('mousedown', e => startDraw(e.offsetX, e.offsetY));
+  canvas.addEventListener('mousemove', e => moveDraw(e.offsetX, e.offsetY));
+  canvas.addEventListener('mouseup', endDraw);
+
+  canvas.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    startDraw(t.clientX - rect.left, t.clientY - rect.top);
+  });
+
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    moveDraw(t.clientX - rect.left, t.clientY - rect.top);
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', endDraw);
+
+  function clearCanvas() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    paths = [];
+    redoStack = [];
+  }
+
+  function undo() {
+    if (paths.length === 0) return;
+    redoStack.push(paths.pop());
+    redraw();
+  }
+
+  function redo() {
+    if (redoStack.length === 0) return;
+    paths.push(redoStack.pop());
+    redraw();
+  }
+
+  function redraw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of paths) {
+      drawLine(p.x1, p.y1, p.x2, p.y2, p.settings);
+    }
+  }
+</script>
+</body>
+</html>
